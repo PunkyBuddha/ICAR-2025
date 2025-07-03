@@ -96,7 +96,7 @@ void indi_init_filters_indi(void)
 	float tau = 1.0f / (2.0f * M_PI_F * indi.filt_freq_indi);
 	float tau_r = 1.0f / (2.0f * M_PI_F * indi.filt_freq_r_indi);
 	float tau_axis[3] = {tau, tau, tau_r};
-	float sample_time = 1.0f / ATTITUDE_RATE;
+	float sample_time = 1.0f / ATTITUDE_RATE; // 250Hz is the rate at which the INDI controller is updated
 	// Filtering of gyroscope and actuators
 	for (int8_t i = 0; i < 3; i++) {
 		init_outer_indi_filter(&indi.u[i], tau_axis[i], sample_time, 0.0f);
@@ -293,7 +293,7 @@ void controllerINDI(control_t *control, const setpoint_t *setpoint,
 			Angles.r  = -radians(state->attitude.yaw); //negative yaw ENU  ->  NED
 
 			// Apllying the filter to the angular velocity from sensors.
-			filter_pqr(indi.attitudeFiltered, &Angles);
+			filter_indi(indi.attitudeFiltered, &Angles);
 
 			// Derivating the angular velocity, to find a measured angular acceleration.
 			finite_difference_from_filter(indi.attitudeFiltered_d, indi.attitudeFiltered);
