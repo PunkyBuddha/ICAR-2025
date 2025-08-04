@@ -34,6 +34,7 @@ static attitude_t attitudeDesired;
 static attitude_t rateDesired;
 // static attitude_t rateDesiredindi;
 static attitude_t angleError;
+static attitude_t rateError;
 static float actuatorThrust;
 struct FloatRates body_rates;
 struct FloatRates Angles;
@@ -281,7 +282,7 @@ void controllerINDI(control_t *control, const setpoint_t *setpoint,
 
 		filter_pqr(indi.rate, &body_rates);
 		
-		if (k == 2) {
+		if (k == 3) {
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		// PROPOSED INDI CONTROLLER FOR ATTITUDE CONTROL
 		// This is the inner loop of the INDI controller, which is used to control the attitude of the Crazyflie.
@@ -370,6 +371,10 @@ void controllerINDI(control_t *control, const setpoint_t *setpoint,
 		float attitude_error_q = rateDesired.pitch - body_rates.q;
 		float attitude_error_r = rateDesired.yaw - body_rates.r;
 
+		rateError.roll  = attitude_error_p;
+		rateError.pitch = attitude_error_q;
+		rateError.yaw 	= attitude_error_r;
+
 		//Apply derivative gain
 		indi.angular_accel_ref.p = indi.reference_acceleration.rate_p * attitude_error_p;
 		indi.angular_accel_ref.q = indi.reference_acceleration.rate_q * attitude_error_q;
@@ -383,9 +388,9 @@ void controllerINDI(control_t *control, const setpoint_t *setpoint,
 		//G1 is the control effectiveness. In the yaw axis, we need something additional: G2.
 		//It takes care of the angular acceleration caused by the change in rotation rate of the propellers
 		//(they have significant inertia, see the paper mentioned in the header for more explanation)
-		indi.du.p = 0.8f / indi.g1.p * (indi.angular_accel_ref.p - indi.rate_d[0]);
-		indi.du.q = 0.8f / indi.g1.q * (indi.angular_accel_ref.q - indi.rate_d[1]);
-		indi.du.r = 0.8f / (indi.g1.r + indi.g2) * (indi.angular_accel_ref.r - indi.rate_d[2] + indi.g2 * indi.du.r);
+		indi.du.p = 0.7f / indi.g1.p * (indi.angular_accel_ref.p - indi.rate_d[0]);
+		indi.du.q = 0.7f / indi.g1.q * (indi.angular_accel_ref.q - indi.rate_d[1]);
+		indi.du.r = 0.7f / (indi.g1.r + indi.g2) * (indi.angular_accel_ref.r - indi.rate_d[2] + indi.g2 * indi.du.r);
 
 
 		/*
@@ -433,10 +438,6 @@ void controllerINDI(control_t *control, const setpoint_t *setpoint,
 	control->roll   = indi.u_in.p;
 	control->pitch  = indi.u_in.q;
 	control->yaw    = indi.u_in.r;
-
-	// indi.u_act_dyn.p = indi.u_act_dyn.p + indi.act_dyn.p * (indi.u_in.p - indi.u_act_dyn.p);
-	// indi.u_act_dyn.q = indi.u_act_dyn.q + indi.act_dyn.q * (indi.u_in.q - indi.u_act_dyn.q);
-	// indi.u_act_dyn.r = indi.u_act_dyn.r + indi.act_dyn.r * (indi.u_in.r - indi.u_act_dyn.r);
 
 }
 
@@ -528,23 +529,27 @@ PARAM_ADD(PARAM_UINT8, outerLoopActive, &outerLoopActive)
 PARAM_GROUP_STOP(ctrlINDI)
 
 LOG_GROUP_START(ctrlINDI)
+// /**
+//  * @brief INDI Thrust motor command [motor units]
+//  */
+// LOG_ADD(LOG_FLOAT, cmd_thrust, &indi.thrust)
+///**
+// * @brief INDI Roll motor command [motor units]
+// */
+//LOG_ADD(LOG_FLOAT, cmd_roll, &indi.u_in.p)
+///**
+// * @brief INDI Pitch motor command [motor units]
+// */
+//LOG_ADD(LOG_FLOAT, cmd_pitch, &indi.u_in.q)
+///**
+// * @brief INDI Yaw motor command [motor units]
+// */
+//LOG_ADD(LOG_FLOAT, cmd_yaw, &indi.u_in.r)
+
 /**
  * @brief INDI Thrust motor command [motor units]
  */
-LOG_ADD(LOG_FLOAT, cmd_thrust, &indi.thrust)
-// // /**
-// //  * @brief INDI Roll motor command [motor units]
-// //  */
-// // LOG_ADD(LOG_FLOAT, cmd_roll, &indi.u_in.p)
-// // /**
-// //  * @brief INDI Pitch motor command [motor units]
-// //  */
-// // LOG_ADD(LOG_FLOAT, cmd_pitch, &indi.u_in.q)
-// // /**
-// //  * @brief INDI Yaw motor command [motor units]
-// //  */
-// // LOG_ADD(LOG_FLOAT, cmd_yaw, &indi.u_in.r)
-
+LOG_ADD(LOG_FLOAT, cmd_thrust, &indi.rate_d[2])
 /**
  * @brief INDI Roll motor command [motor units]
  */
@@ -557,7 +562,6 @@ LOG_ADD(LOG_FLOAT, cmd_pitch, &angleError.pitch)
  * @brief INDI Yaw motor command [motor units]
  */
 LOG_ADD(LOG_FLOAT, cmd_yaw, &angleError.yaw)
-
 
 /**
  * @brief INDI unfiltered Gyroscope roll rate measurement (only factory filter and 2 pole low-pass filter) [rad/s]
@@ -572,44 +576,18 @@ LOG_ADD(LOG_FLOAT, r_pitch, &body_rates.q)
  */
 LOG_ADD(LOG_FLOAT, r_yaw, &body_rates.r)
 
-// // /**
-// //  * @brief INDI unfiltered Gyroscope roll rate measurement (only factory filter and 2 pole low-pass filter) [rad/s]
-// //  */
-// // LOG_ADD(LOG_FLOAT, r_roll, &rateDesired.roll)
-// // /**
-// //  * @brief INDI unfiltered Gyroscope pitch rate measurement (only factory filter and 2 pole low-pass filter) [rad/s]
-// //  */
-// // LOG_ADD(LOG_FLOAT, r_pitch, &rateDesired.pitch)
-// // /**
-// //  * @brief INDI unfiltered Gyroscope yaw rate measurement (only factory filter and 2 pole low-pass filter) [rad/s]
-// //  */
-// // LOG_ADD(LOG_FLOAT, r_yaw, &rateDesired.yaw)
-
-// // /**
-// //  * @brief INDI roll motor command propagated through motor dynamics [motor units]
-// //  */
-// // LOG_ADD(LOG_FLOAT, u_act_dyn_p, &indi.u_act_dyn.p)
-// // /**
-// //  * @brief INDI pitch motor command propagated through motor dynamics [motor units]
-// //  */
-// // LOG_ADD(LOG_FLOAT, u_act_dyn_q, &indi.u_act_dyn.q)
-// // /**
-// //  * @brief INDI yaw motor command propagated through motor dynamics [motor units]
-// //  */
-// // LOG_ADD(LOG_FLOAT, u_act_dyn_r, &indi.u_act_dyn.r)
-
 /**
  * @brief INDI roll motor command propagated through motor dynamics [motor units]
  */
-LOG_ADD(LOG_FLOAT, u_act_dyn_p, &attitudeDesired.roll)
+LOG_ADD(LOG_FLOAT, u_act_dyn_p, &indi.u_act_dyn.p)
 /**
  * @brief INDI pitch motor command propagated through motor dynamics [motor units]
  */
-LOG_ADD(LOG_FLOAT, u_act_dyn_q, &attitudeDesired.pitch)
+LOG_ADD(LOG_FLOAT, u_act_dyn_q, &indi.u_act_dyn.q)
 /**
  * @brief INDI yaw motor command propagated through motor dynamics [motor units]
  */
-LOG_ADD(LOG_FLOAT, u_act_dyn_r, &attitudeDesired.yaw)
+LOG_ADD(LOG_FLOAT, u_act_dyn_r, &indi.u_act_dyn.r)
 
 /**
  * @brief INDI roll motor command increment [motor units]
@@ -640,66 +618,79 @@ LOG_ADD(LOG_FLOAT, ang_accel_ref_r, &indi.angular_accel_ref.r)
 /**
  * @brief INDI derived angular acceleration from filtered gyroscope measurement, roll [rad/s^2]
  */
-LOG_ADD(LOG_FLOAT, rate_d_p, &indi.rate_d[0])
+LOG_ADD(LOG_FLOAT, rate_d[0], &indi.rate_d[0])
 /**
  * @brief INDI derived angular acceleration from filtered gyroscope measurement, pitch [rad/s^2]
  */
-LOG_ADD(LOG_FLOAT, rate_d_q, &indi.rate_d[1])
+LOG_ADD(LOG_FLOAT, rate_d[1], &indi.rate_d[1])
 /**
  * @brief INDI derived angular acceleration from filtered gyroscope measurement, yaw [rad/s^2]
  */
-LOG_ADD(LOG_FLOAT, rate_d_r, &indi.rate_d[2])
+LOG_ADD(LOG_FLOAT, rate_d[2], &indi.rate_d[2])
+
+///**
+// * @brief INDI filtered (8Hz low-pass) roll motor input from previous time step [motor units]
+// */
+//LOG_ADD(LOG_FLOAT, uf_p, &indi.u[0].o[0])
+///**
+// * @brief INDI filtered (8Hz low-pass) pitch motor input from previous time step [motor units]
+// */
+//LOG_ADD(LOG_FLOAT, uf_q, &indi.u[1].o[0])
+///**
+// * @brief INDI filtered (8Hz low-pass) yaw motor input from previous time step [motor units]
+// */
+//LOG_ADD(LOG_FLOAT, uf_r, &indi.u[2].o[0])
 
 /**
  * @brief INDI filtered (8Hz low-pass) roll motor input from previous time step [motor units]
  */
-LOG_ADD(LOG_FLOAT, uf_p, &indi.u[0].o[0])
+LOG_ADD(LOG_FLOAT, uf_p, &rateError.roll)
 /**
  * @brief INDI filtered (8Hz low-pass) pitch motor input from previous time step [motor units]
  */
-LOG_ADD(LOG_FLOAT, uf_q, &indi.u[1].o[0])
+LOG_ADD(LOG_FLOAT, uf_q, &rateError.pitch)
 /**
  * @brief INDI filtered (8Hz low-pass) yaw motor input from previous time step [motor units]
  */
-LOG_ADD(LOG_FLOAT, uf_r, &indi.u[2].o[0])
+LOG_ADD(LOG_FLOAT, uf_r, &rateError.yaw)
+
+///**
+// * @brief INDI filtered gyroscope measurement (8Hz low-pass), roll [rad/s]
+// */
+//LOG_ADD(LOG_FLOAT, Omega_f_p, &indi.rate[0].o[0])
+///**
+ //* @brief INDI filtered gyroscope measurement (8Hz low-pass), pitch [rad/s]
+ //*/
+//LOG_ADD(LOG_FLOAT, Omega_f_q, &indi.rate[1].o[0])
+///**
+ //* @brief INDI filtered gyroscope measurement (8Hz low-pass), yaw [rad/s]
+ //*/
+//LOG_ADD(LOG_FLOAT, Omega_f_r, &indi.rate[2].o[0])
 
 /**
  * @brief INDI filtered gyroscope measurement (8Hz low-pass), roll [rad/s]
  */
-LOG_ADD(LOG_FLOAT, Omega_f_p, &indi.rate[0].o[0])
+LOG_ADD(LOG_FLOAT, Omega_f_p, &rateDesired.roll)
 /**
- * @brief INDI filtered gyroscope measurement (8Hz low-pass), pitch [rad/s]
- */
-LOG_ADD(LOG_FLOAT, Omega_f_q, &indi.rate[1].o[0])
+* @brief INDI filtered gyroscope measurement (8Hz low-pass), pitch [rad/s]
+*/
+LOG_ADD(LOG_FLOAT, Omega_f_q, &rateDesired.pitch)
 /**
- * @brief INDI filtered gyroscope measurement (8Hz low-pass), yaw [rad/s]
- */
-LOG_ADD(LOG_FLOAT, Omega_f_r, &indi.rate[2].o[0])
-
-// /**
-//  * @brief INDI desired attitude angle from outer loop, roll [rad]
-//  */
-// LOG_ADD(LOG_FLOAT, n_p, &attitudeDesired.roll)
-// /**
-//  * @brief INDI desired attitude angle from outer loop, pitch [rad]
-//  */
-// LOG_ADD(LOG_FLOAT, n_q, &attitudeDesired.pitch)
-// /**
-//  * @brief INDI desired attitude angle from outer loop, yaw [rad]
-//  */
-// LOG_ADD(LOG_FLOAT, n_r, &attitudeDesired.yaw)
+* @brief INDI filtered gyroscope measurement (8Hz low-pass), yaw [rad/s]
+*/
+LOG_ADD(LOG_FLOAT, Omega_f_r, &rateDesired.yaw)
 
 /**
  * @brief INDI desired attitude angle from outer loop, roll [rad]
  */
-LOG_ADD(LOG_FLOAT, n_p, &rateDesired.roll)
+LOG_ADD(LOG_FLOAT, n_p, &attitudeDesired.roll)
 /**
  * @brief INDI desired attitude angle from outer loop, pitch [rad]
  */
-LOG_ADD(LOG_FLOAT, n_q, &rateDesired.pitch)
+LOG_ADD(LOG_FLOAT, n_q, &attitudeDesired.pitch)
 /**
  * @brief INDI desired attitude angle from outer loop, yaw [rad]
  */
-LOG_ADD(LOG_FLOAT, n_r, &rateDesired.yaw)
+LOG_ADD(LOG_FLOAT, n_r, &attitudeDesired.yaw)
 
 LOG_GROUP_STOP(ctrlINDI)
